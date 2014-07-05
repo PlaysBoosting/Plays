@@ -1,0 +1,359 @@
+--[[
+    Perfect Ward 1.7.3 by Husky. Updated by Ballsdeep
+    ========================================================================
+
+    Makes warding a no-brainer by suggesting good ward places, that give you
+    the maximum field of view for most of the important ward spots where
+    ward positioning is crucial (in brushes + at dragon/nashor).
+
+    Magnetic ward spots make it nearly impossible to misplace a ward - even
+    in stressfull situations. This maximizes your vision and helps you gank
+    and counter jungle.
+
+    Changelog
+    ~~~~~~~~~
+
+    1.0    - Magnetic ward spots makes wards "snap" to the perfect position
+
+    1.1    - Added "safe wards" that can be placed over walls
+            (thx to Dottie for coordinates)
+           - Smartcasting wards is now supported through packet modification
+            (thx to TRUS for initial code snippet)
+           - Added configurable hotkeys, for people having slot items bound
+             to non-default keys
+           - Added an intelligent anti-gank system, that automatically pings
+             roaming enemies
+           - Added Possibility, to easily dump ward coordinates for script
+             customization (click on a placed ward and hover the ward with
+             your mouse to see the coordinates)
+
+    1.2    - Removed the anti-gank system, since it has to be improved to send
+             reasonable pings. It will be part of a separate Script (Perfect
+             Ping).
+           - Simplified the placement of "safe wards" by automating the movement
+             and moving the magnetic spots closer to the place from where the wards
+             are put.
+           - Improved the visuals to make it easier to distinguish warding spots
+             between "safe wards" and "perfect wards".
+           - Fixed FPS issues for users with not so powerfull computers.
+
+    1.3   - Added new ward items of season 3 patch
+
+    1.4   - Fixed a problem that occured when using other scripts that utilize
+            the packet api as well
+
+    1.5   - Removed AllClass since its included by default
+          - Made it work with new Version of Bot of Legends
+
+    1.6   - Added compatability for BoL Mods hotkeys
+          - Added new ward spots to reflect season 3 map changes
+          - Fixed a bug showing c stack overflows when casting inside a circle
+
+    1.7   - Added full support for free users (except smart cast items)
+
+    1.7.1 - Fixed a small bug with smartcasted wards not being magnetic after latest changes
+          - Reduced the amount of ward spots drawn, by showing only the visible spots (increases fps)
+
+    1.7.2 - script uses the Packet library now, to faster address packet changes in the future
+
+    1.7.3 - Updated Season 4 warding spots nd items, and added few extra warding spots
+
+    Hotkeys
+    ~~~~~~~
+
+    Just press the number associated to the inventory slot containing your
+    ward, or define your own Hotkeys in the script
+]]
+
+-- Config ----------------------------------------------------------------------
+
+local HK_1 = HK_1 and string.byte(HK_1) or 49 -- hotkey for first itemslot (default "1")
+local HK_2 = HK_2 and string.byte(HK_2) or 50 -- hotkey for first itemslot (default "2")
+local HK_3 = HK_3 and string.byte(HK_3) or 51 -- hotkey for first itemslot (default "3")
+local HK_4 = HK_4 and string.byte(HK_4) or 52 -- hotkey for first itemslot (default "4")
+local HK_5 = HK_5 and string.byte(HK_5) or 53 -- hotkey for first itemslot (default "5")
+local HK_6 = HK_6 and string.byte(HK_6) or 54 -- hotkey for first itemslot (default "6")
+local HK_7 = HK_7 and string.byte(HK_7) or 55 -- hotkey for first itemslot (default "7")
+
+local wardSpots = {
+    -- Perfect Wards
+    { x = 2823.37,    y = 55.03,  z = 7617.03},     -- BLUE GOLEM
+    { x = 7422,    y = 46.53,  z = 3282},     -- BLUE LIZARD
+    { x = 10148,   y = 44.41,  z = 2839},     -- BLUE TRI BUSH
+    { x = 6269,    y = 42.51,  z = 4445},     -- BLUE PASS BUSH
+    { x = 7151.64,    y = 51.67,  z = 4719.66},     -- BLUE RIVER ENTRANCE
+    { x = 4728,    y = -51.29, z = 8336},     -- BLUE RIVER ROUND BUSH
+    { x = 6762.52,    y = 55.68,  z = 2918.75},     -- BLUE SPLIT PUSH BUSH
+
+    { x = 11217.39,   y = 54.87,  z = 6841.89},     -- PURPLE GOLEM
+    { x = 6610.35,    y = 54.45,  z = 11064.61},    -- PURPLE LIZARD
+    { x = 3883,    y = 39.87,  z = 11577},    -- PURPLE TRI BUSH
+    { x = 7775,    y = 43.14,  z = 10046.49}, -- PURPLE PASS BUSH
+    { x = 6867.68, y = 57.01,  z = 9567.63},     -- PURPLE RIVER ENTRANCE
+    { x = 9720.86,    y = 54.85,  z = 7501.50},     -- PURPLE ROUND BUSH
+    { x = 9233.13,    y = -44.63, z = 6094.48},     -- PURPLE RIVER ROUND BUSH
+    { x = 7282.69,    y = 52.59,     z = 11482.53},    -- PURPLE SPLIT PUSH BUSH
+
+    { x = 10180.18,   y = -62.32,    z = 4969.32},      -- DRAGON
+    { x = 8875.13,  y = -64.07,  z = 5390.57}, -- DRAGON BUSH
+    { x = 3920.88,   y = -60.42,    z = 9477.78},      -- BARON
+    { x = 5017.27,  y = -62.70,  z = 8954.09}, -- BARON BUSH
+
+    { x = 12731.25,  y = 50.32,  z = 9132.66}, -- PURPLE BOT T2
+    { x = 8036.52,  y = 45.19,  z = 12882.94}, -- PURPLE TOP T2
+    { x = 9260.02,  y = 54.62,  z = 8582.67}, -- PURPLE MID T1
+
+    { x = 4749.79,  y = 53.59,  z = 5890.76}, -- BLUE MID T1
+    { x = 5983.58,  y = 52.99,  z = 1547.98}, -- BLUE BOT T2
+    { x = 1213.70,  y = 58.77,  z = 5324.73}, -- BLUE TOP T2
+
+		{ x = 9641.6591796875,  y = 53.01416015625,  z = 6368.748046875}, -- BLUE TOP T2
+		{ x = 8081.4360351563,  y = 55.9482421875,  z = 4683.443359375}, -- BLUE TOP T2
+		{ x = 5943.51953125,  y = 53.189331054688,  z = 9792.4091796875}, -- BLUE TOP T2
+		{ x = 4379.513671875,  y = 42.734619140625,  z = 8093.740234375}, -- BLUE TOP T2
+		{ x = 4222.724609375,  y = 53.612548828125,  z = 7038.5805664063}, -- BLUE TOP T2
+		{ x = 9068.0224609375,  y = 53.22705078125,  z = 11186.685546875}, -- BLUE TOP T2
+		{ x = 7970.822265625,  y = 53.527709960938,  z = 10005.072265625}, -- BLUE TOP T2
+		{ x = 4978.1943359375,  y = 54.343017578125,  z = 3042.6975097656}, -- BLUE TOP T2
+}
+
+local safeWardSpots = {
+    {    -- DRAGON -> TRI BUSH
+        magneticSpot =  {x = 9695,    y = 43.02, z = 3465},
+        clickPosition = {x = 9843.38, y = 43.02, z = 3125.16},
+        wardPosition =  {x = 9946.10, y = 43.02, z = 3064.81},
+        movePosition  = {x = 9595,    y = 43.02, z = 3665}
+    },
+    {    -- NASHOR -> TRI BUSH
+        magneticSpot =  {x = 4346.10, y = 36.62, z = 10964.81},
+        clickPosition = {x = 4214.93, y = 36.62, z = 11202.01},
+        wardPosition =  {x = 4146.10, y = 36.62, z = 11314.81},
+        movePosition  = {x = 4384.36, y = 36.62, z = 10680.41}
+    },
+    {    -- BLUE TOP -> SOLO BUSH
+        magneticSpot  = {x = 2349,    y = 44.20, z = 10387},
+        clickPosition = {x = 2267.97, y = 44.20, z = 10783.37},
+        wardPosition  = {x = 2446.10, y = 44.20, z = 10914.81},
+        movePosition  = {x = 2311,    y = 44.20, z = 10185}
+    },
+    { -- BLUE MID -> ROUND BUSH // Inconsistent Placement
+        magneticSpot  = {x = 4946.52, y = 54.71, z = 6474.56},
+        clickPosition = {x = 4891.98, y = 53.62, z = 6639.05},
+        wardPosition  = {x = 4546.10, y = 53.78, z = 6864.81},
+        movePosition  = {x = 5217,    y = 54.95, z = 6263}
+    },
+    { -- BLUE MID -> RIVER LANE BUSH
+        magneticSpot  = {x = 5528.96, y = 45.64, z = 7615.20},
+        clickPosition = {x = 5688.96, y = 45.64, z = 7825.20},
+        wardPosition  = {x = 5796.10, y = 45.64, z = 7914.81},
+        movePosition  = {x = 5460.13, y = 45.64, z = 7469.77}
+    },
+    { -- BLUE LIZARD -> DRAGON PASS BUSH
+        magneticSpot  = {x = 7745,    y = 47.71, z = 4065},
+        clickPosition = {x = 7927.65, y = 47.71, z = 4239.77},
+        wardPosition  = {x = 8146.10, y = 47.71, z = 4414.81},
+        movePosition  = {x = 7645,    y = 47.71, z = 4015}
+    },
+    { -- PURPLE MID -> ROUND BUSH // Inconsistent Placement
+        magneticSpot  = {x = 9057,    y = 45.73, z = 8245},
+        clickPosition = {x = 9230.77, y = 66.39, z = 7897.22},
+        wardPosition  = {x = 9446.10, y = 54.66, z = 7814.81},
+        movePosition  = {x = 8895,    y = 54.89, z = 8313}
+    },
+    { -- PURPLE MID -> RIVER ROUND BUSH // Inconsistent Placement
+        magneticSpot  = {x = 9025.78, y = 46.27, z = 6591.64},
+        clickPosition = {x = 9200.08, y = 43.21, z = 6425.05},
+        wardPosition  = {x = 9396.10, y = 23.72, z = 6264.81},
+        movePosition  = {x = 8795, y = 56.11, z = 6815}
+    },
+    { -- PURPLE MID -> RIVER LANE BUSH
+        magneticSpot  = {x = 8530.27, y = 46.98, z = 6637.38},
+        clickPosition = {x = 8539.27, y = 46.98, z = 6637.38},
+        wardPosition  = {x = 8396.10, y = 46.98, z = 6464.81},
+        movePosition  = {x = 8779.17, y = 46.98, z = 6804.70}
+    },
+    { -- PURPLE BOTTOM -> SOLO BUSH
+        magneticSpot  = {x = 11889,    y = 42.84, z = 4205},
+        clickPosition = {x = 11974.23, y = 42.84, z = 3807.21},
+        wardPosition  = {x = 11646.10, y = 42.84, z = 3464.81},
+        movePosition  = {x = 11939,    y = 42.84, z = 4255}
+    },
+    { -- PURPLE LIZARD -> NASHOR PASS BUSH // Inconsistent Placement
+        magneticSpot  = {x = 6299,    y = 45.47, z = 10377.75},
+        clickPosition = {x = 6030.24, y = 54.29, z = 10292.37},
+        wardPosition  = {x = 5846.10, y = 53.94, z = 10164.81},
+        movePosition  = {x = 6447,    y = 54.63, z = 10463}
+    }
+}
+
+local wardItems = {
+    { id = 2043, spellName = "VisionWard",     range = 1450, duration = 180000},
+    { id = 2044, spellName = "SightWard",      range = 1450, duration = 180000},
+    { id = 3154, spellName = "WriggleLantern", range = 1450, duration = 180000},
+    { id = 2045, spellName = "ItemGhostWard",  range = 1450, duration = 180000},
+    { id = 2049, spellName = "ItemGhostWard",  range = 1450, duration = 180000},
+    { id = 2050, spellName = "ItemMiniWard",   range = 1450, duration = 60000}
+}
+
+-- Globals ---------------------------------------------------------------------
+
+local drawWardSpots      = false
+local wardSlot           = nil
+local putSafeWard        = nil
+local wardCorrected      = false
+local packetApiAvailable = false
+
+-- Code ------------------------------------------------------------------------
+
+function OnLoad()
+    PrintChat(" >> Perfect Ward 1.7.3")
+end
+
+function OnTick()
+    if putSafeWard ~= nil then
+        if GetDistance(safeWardSpots[putSafeWard].clickPosition, myHero) <= 650 then
+            CastSpell(wardSlot, safeWardSpots[putSafeWard].clickPosition.x, safeWardSpots[putSafeWard].clickPosition.z)
+            putSafeWard = nil
+        end
+    end
+end
+
+function OnWndMsg(msg,key)
+    if msg == KEY_DOWN then
+        wardSlot = nil
+        if key == HK_1 then
+            wardSlot = ITEM_1
+        elseif key == HK_2 then
+            wardSlot = ITEM_2
+        elseif key == HK_3 then
+            wardSlot = ITEM_3
+        elseif key == HK_4 then
+            wardSlot = ITEM_7
+        elseif key == HK_5 then
+            wardSlot = ITEM_4
+        elseif key == HK_6 then
+            wardSlot = ITEM_5
+        elseif key == HK_7 then
+            wardSlot = ITEM_6
+        end
+
+        if wardSlot ~= nil then
+            if wardSlot == ITEM_7 then
+                drawWardSpots = true
+                return
+            else
+                local item = myHero:getInventorySlot(wardSlot)
+                for i,wardItem in pairs(wardItems) do
+                    if item == wardItem.id and myHero:CanUseSpell(wardSlot) == READY then
+                        drawWardSpots = true
+                        return
+                    end
+                end
+            end
+        end
+    elseif msg == WM_LBUTTONUP and drawWardSpots then
+        drawWardSpots = false
+    elseif msg == WM_LBUTTONDOWN and drawWardSpots and not packetApiAvailable then
+        drawWardSpots = false
+        for i,wardSpot in pairs(wardSpots) do
+            if GetDistance(wardSpot, mousePos) <= 250 and not wardCorrected then
+                CastSpell(wardSlot, wardSpot.x, wardSpot.z)
+                return
+            end
+        end
+
+        for i,wardSpot in pairs(safeWardSpots) do
+            if GetDistance(wardSpot.magneticSpot, mousePos) <= 100 and not wardCorrected then
+                CastSpell(wardSlot, wardSpot.clickPosition.x, wardSpot.clickPosition.z)
+                myHero:MoveTo(wardSpot.movePosition.x, wardSpot.movePosition.z)
+                putSafeWard = i
+                return
+            end
+        end
+    elseif msg == WM_RBUTTONDOWN and drawWardSpots then
+        drawWardSpots = false
+    elseif msg == WM_RBUTTONDOWN then
+        putSafeWard = nil
+    end
+end
+
+function OnSendPacket(p)
+    packetApiAvailable = true
+
+    local packet = Packet(p)
+    if packet:get('name') == 'S_CAST' then
+        if wardSlot == packet:get('spellId') or (wardSlot == ITEM_7 and packet:get('spellId') == 138) then
+            drawWardSpots = false
+            for i,wardSpot in pairs(wardSpots) do
+                if GetDistance(wardSpot, {x = packet:get('fromX'), y = myHero.y, z = packet:get('fromY')}) <= 250 and not wardCorrected then
+                    packet:block()
+                    wardCorrected = true
+                    Packet('S_CAST', {spellId = packet:get('spellId'), fromX = wardSpot.x, fromY = wardSpot.z, toX = wardSpot.x, toY = wardSpot.z}):send()
+                    wardCorrected = false
+                    return
+                end
+            end
+
+            for i,wardSpot in pairs(safeWardSpots) do
+                if GetDistance(wardSpot.magneticSpot, {x = packet:get('fromX'), y = myHero.y, z = packet:get('fromY')}) <= 100 and not wardCorrected then
+                    packet:block()
+                    myHero:MoveTo(wardSpot.movePosition.x, wardSpot.movePosition.z)
+                    putSafeWard = i
+                    return
+                end
+            end
+        end
+    end
+end
+
+function OnDraw()
+    if drawWardSpots then
+        for i, wardSpot in pairs(wardSpots) do
+            local wardColor = (GetDistance(wardSpot, mousePos) <= 250) and 0x00FF00 or 0xFFFFFF
+
+            local x, y, onScreen = get2DFrom3D(wardSpot.x, wardSpot.y, wardSpot.z)
+            if onScreen then
+                DrawCircle(wardSpot.x, wardSpot.y, wardSpot.z, 31, wardColor)
+                DrawCircle(wardSpot.x, wardSpot.y, wardSpot.z, 32, wardColor)
+                DrawCircle(wardSpot.x, wardSpot.y, wardSpot.z, 250, wardColor)
+            end
+        end
+
+        for i,wardSpot in pairs(safeWardSpots) do
+            local wardColor  = (GetDistance(wardSpot.magneticSpot, mousePos) <= 100) and 0x00FF00 or 0xFFFFFF
+            local arrowColor = (GetDistance(wardSpot.magneticSpot, mousePos) <= 100) and RGBA(0,255,0,0) or RGBA(255,255,255,0)
+
+            local x, y, onScreen = get2DFrom3D(wardSpot.magneticSpot.x, wardSpot.magneticSpot.y, wardSpot.magneticSpot.z)
+            if onScreen then
+                DrawCircle(wardSpot.wardPosition.x, wardSpot.wardPosition.y, wardSpot.wardPosition.z, 31, wardColor)
+                DrawCircle(wardSpot.wardPosition.x, wardSpot.wardPosition.y, wardSpot.wardPosition.z, 32, wardColor)
+
+                DrawCircle(wardSpot.magneticSpot.x, wardSpot.magneticSpot.y, wardSpot.magneticSpot.z, 99, wardColor)
+                DrawCircle(wardSpot.magneticSpot.x, wardSpot.magneticSpot.y, wardSpot.magneticSpot.z, 100, wardColor)
+
+                local magneticWardSpotVector = Vector(wardSpot.magneticSpot.x, wardSpot.magneticSpot.y, wardSpot.magneticSpot.z)
+                local wardPositionVector = Vector(wardSpot.wardPosition.x, wardSpot.wardPosition.y, wardSpot.wardPosition.z)
+                local directionVector = (wardPositionVector-magneticWardSpotVector):normalized()
+                local magneticWardSpotLineVector = magneticWardSpotVector + directionVector * 90
+
+                DrawArrow(D3DXVECTOR3(magneticWardSpotLineVector.x, magneticWardSpotLineVector.y, magneticWardSpotLineVector.z), D3DXVECTOR3(directionVector.x, directionVector.y, directionVector.z), GetDistance(magneticWardSpotVector, wardPositionVector) + 85, 20, -10000000000000000000000, arrowColor)
+            end
+        end
+    end
+
+    local target = GetTarget()
+    for i,wardItem in pairs(wardItems) do
+        if target ~= nil and target.name == wardItem.spellName then
+            DrawCircle(target.x, target.y, target.z, 68, 0x00FF00)
+            DrawCircle(target.x, target.y, target.z, 69, 0x00FF00)
+            DrawCircle(target.x, target.y, target.z, 70, 0x00FF00)
+            if GetDistanceFromMouse(target) <= 70 then
+                local cursor = GetCursorPos()
+
+                DrawText("X = " .. string.format("%.2f", target.x),16, cursor.x, cursor.y + 50, 0xFF00FF00)
+                DrawText("Y = " .. string.format("%.2f", target.y),16, cursor.x, cursor.y + 65, 0xFF00FF00)
+                DrawText("Z = " .. string.format("%.2f", target.z),16, cursor.x, cursor.y + 80, 0xFF00FF00)
+            end
+        end
+    end
+end
